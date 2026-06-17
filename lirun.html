@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订单数据分析工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- 标题区域 -->
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-chart-line text-blue-600 mr-3"></i>
+                订单数据分析工具
+            </h1>
+            <p class="text-gray-600 text-lg">上传Excel文件，自动计算订单利润分析</p>
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="bg-white rounded-xl shadow-lg p-8 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- 文件上传 -->
+                <div class="col-span-1 md:col-span-1">
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
+                        <input type="file" id="fileUpload" accept=".xlsx,.xls" class="hidden" />
+                        <label for="fileUpload" class="cursor-pointer">
+                            <i class="fas fa-file-excel text-green-50 text-4xl mb-3"></i>
+                            <p class="text-gray-700 font-medium">点击上传Excel文件</p>
+                            <p class="text-gray-500 text-sm mt-1">支持 .xlsx, .xls 格式</p>
+                        </label>
+                        <p id="fileName" class="text-sm text-gray-500 mt-2"></p>
+                    </div>
+                </div>
+
+                <!-- 参数输入 -->
+                <div class="col-span-1 md:col-span-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label for="exchangeRate" class="block text-sm font-medium text-gray-700 mb-1">汇率</label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
+                                    <i class="fas fa-dollar-sign"></i>
+                                </span>
+                                <input type="number" id="exchangeRate" step="0.0001" min="0.0001" 
+                                    class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="输入汇率">
+                            </div>
+                        </div>
+                        <div>
+                            <label for="commissionRate" class="block text-sm font-medium text-gray-700 mb-1">抽点 (%)</label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
+                                    <i class="fas fa-percentage"></i>
+                                </span>
+                                <input type="number" id="commissionRate" step="0.01" min="0" max="100" 
+                                    class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="输入抽点">
+                            </div>
+                        </div>
+                        <div>
+                            <label for="directTrain" class="block text-sm font-medium text-gray-700 mb-1">直通车费用</label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
+                                    <i class="fas fa-car"></i>
+                                </span>
+                                <input type="number" id="directTrain" step="0.01" min="0" 
+                                    class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="输入直通车">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 计算按钮 -->
+                    <div class="mt-6">
+                        <button id="calculateBtn" 
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center">
+                            <i class="fas fa-calculator mr-2"></i>
+                            开始计算
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 结果展示区域 -->
+        <div id="resultsArea" class="hidden">
+            <!-- 汇总数据卡片 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">总回款</p>
+                            <p id="totalRevenue" class="text-2xl font-bold text-gray-800">0.00</p>
+                        </div>
+                        <div class="bg-blue-100 p-3 rounded-full">
+                            <i class="fas fa-coins text-blue-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">抽点回款</p>
+                            <p id="commissionRevenue" class="text-2xl font-bold text-gray-800">0.00</p>
+                        </div>
+                        <div class="bg-green-100 p-3 rounded-full">
+                            <i class="fas fa-hand-holding-usd text-green-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-yellow-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">人民币回款</p>
+                            <p id="rmbRevenue" class="text-2xl font-bold text-gray-800">0.00</p>
+                        </div>
+                        <div class="bg-yellow-100 p-3 rounded-full">
+                            <i class="fas fa-yen-sign text-yellow-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-purple-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">总货款</p>
+                            <p id="totalCost" class="text-2xl font-bold text-gray-800">0.00</p>
+                        </div>
+                        <div class="bg-purple-100 p-3 rounded-full">
+                            <i class="fas fa-box text-purple-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">总打包费</p>
+                            <p id="totalPacking" class="text-2xl font-bold text-gray-800">0.00</p>
+                        </div>
+                        <div class="bg-red-100 p-3 rounded-full">
+                            <i class="fas fa-shipping-fast text-red-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-orange-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">直通车费用(人民币)</p>
+                            <p id="directTrainRmb" class="text-2xl font-bold text-gray-800">0.00</p>
+                        </div>
+                        <div class="bg-orange-100 p-3 rounded-full">
+                            <i class="fas fa-car text-orange-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-rose-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">负回款订单货款和</p>
+                            <p id="negativeCostSum" class="text-2xl font-bold text-gray-800">0.00</p>
+                        </div>
+                        <div class="bg-rose-100 p-3 rounded-full">
+                            <i class="fas fa-exclamation-triangle text-rose-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-indigo-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">总盈利</p>
+                            <p id="totalProfit" class="text-2xl font-bold text-gray-800">0.00</p>
+                        </div>
+                        <div class="bg-indigo-100 p-3 rounded-full">
+                            <i class="fas fa-chart-line text-indigo-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 订单详情表格 + 导出按钮 -->
+            <div class="bg-white rounded-xl shadow-lg mb-8 overflow-hidden">
+                <div class="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-800">
+                        <i class="fas fa-table mr-2"></i>
+                        订单详情
+                    </h2>
+                    <button id="exportBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center">
+                        <i class="fas fa-download mr-2"></i>导出订单表格
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">订单ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总SKU数</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">订单回款</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">打包费</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">货款</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">订单利润</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orderTableBody" class="bg-white divide-y divide-gray-200">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let uploadedData = null;
+        let processedOrders = [];
+        let currentExchangeRate = 0;
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('fileUpload').addEventListener('change', handleFileUpload);
+            document.getElementById('calculateBtn').addEventListener('click', calculateResults);
+            document.getElementById('exportBtn').addEventListener('click', exportOrderTable);
+        });
+
+        // 处理文件上传 + 格式校验
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            document.getElementById('fileName').textContent = file.name;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                    // ====================== 表格格式校验 ======================
+                    const requiredColumns = ["订单id", "sku数量", "订单回款", "sku打包费", "入仓成本"];
+                    if (jsonData.length === 0) {
+                        alert("表格数据为空，请检查文件！");
+                        return;
+                    }
+                    const headers = Object.keys(jsonData[0]);
+                    const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+                    
+                    if (missingColumns.length > 0) {
+                        alert("表格格式错误！缺少必填列：\n" + missingColumns.join("、"));
+                        uploadedData = null;
+                        return;
+                    }
+                    // ==========================================================
+
+                    uploadedData = jsonData;
+                    alert("文件上传成功，格式正确！");
+                } catch (error) {
+                    alert("文件解析失败，请检查是否为正确的Excel文件！");
+                    uploadedData = null;
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 计算结果
+        function calculateResults() {
+            if (!uploadedData || uploadedData.length === 0) {
+                alert('请先上传正确格式的Excel文件！');
+                return;
+            }
+
+            const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
+            const commissionRate = parseFloat(document.getElementById('commissionRate').value);
+            const directTrain = parseFloat(document.getElementById('directTrain').value);
+            currentExchangeRate = exchangeRate;
+
+            if (isNaN(exchangeRate) || exchangeRate <= 0) {
+                alert('请输入有效的汇率');
+                return;
+            }
+            if (isNaN(commissionRate) || commissionRate < 0 || commissionRate > 100) {
+                alert('请输入有效的抽点（0-100）');
+                return;
+            }
+            if (isNaN(directTrain) || directTrain < 0) {
+                alert('请输入有效的直通车费用');
+                return;
+            }
+
+            processOrders();
+            calculateSummary(exchangeRate, commissionRate, directTrain);
+            document.getElementById('resultsArea').classList.remove('hidden');
+        }
+
+        // 处理订单数据
+        function processOrders() {
+            const orderGroups = {};
+            
+            uploadedData.forEach(row => {
+                const orderId = row.订单id;
+                if (!orderGroups[orderId]) orderGroups[orderId] = [];
+                orderGroups[orderId].push(row);
+            });
+
+            processedOrders = [];
+            Object.keys(orderGroups).forEach(orderId => {
+                const items = orderGroups[orderId];
+                
+                // 计算总SKU数
+                const totalSkuCount = items.reduce((sum, item) => sum + Number(item.sku数量), 0);
+                
+                // 计算最高SKU打包费
+                const maxPackingFee = Math.max(...items.map(item => Number(item.sku打包费)));
+                
+                // 计算订单打包费
+                let orderPackingFee = maxPackingFee;
+                if (totalSkuCount > 3) {
+                    orderPackingFee += (totalSkuCount - 3) * 0.6;
+                }
+                
+                // 计算货款
+                const totalCost = items.reduce((sum, item) => sum + (Number(item.sku数量) * Number(item.入仓成本)), 0);
+                
+                // 订单回款
+                const orderRevenue = Number(items[0].订单回款);
+
+                // 订单利润 = 订单回款/汇率 - 打包费 - 货款
+                const orderProfit = (orderRevenue / currentExchangeRate) - orderPackingFee - totalCost;
+                
+                processedOrders.push({
+                    orderId, totalSkuCount, orderRevenue, orderPackingFee, totalCost, orderProfit
+                });
+            });
+
+            // 订单排序 - 负数回款排前面
+            processedOrders.sort((a, b) => {
+                const aIsNegative = a.orderRevenue < 0;
+                const bIsNegative = b.orderRevenue < 0;
+                
+                if (aIsNegative && !bIsNegative) return -1;
+                if (!aIsNegative && bIsNegative) return 1;
+                
+                return 0;
+            });
+
+            fillOrderTable();
+        }
+
+        // 填充订单表格
+        function fillOrderTable() {
+            const tbody = document.getElementById('orderTableBody');
+            tbody.innerHTML = '';
+            
+            processedOrders.forEach(order => {
+                // 回款为负数 设置背景色
+                const rowClass = order.orderRevenue < 0 ? 'bg-red-50' : '';
+                
+                const tr = document.createElement('tr');
+                tr.className = rowClass;
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.orderId}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${order.totalSkuCount}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${order.orderRevenue.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${order.orderPackingFee.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${order.totalCost.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${order.orderProfit.toFixed(2)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 计算汇总数据
+        function calculateSummary(exchangeRate, commissionRate, directTrain) {
+            const totalRevenue = processedOrders.reduce((sum, order) => sum + order.orderRevenue, 0);
+            const commissionRevenue = totalRevenue * (100 - commissionRate) / 100;
+            const rmbRevenue = commissionRevenue / exchangeRate;
+            const totalCost = processedOrders.reduce((sum, order) => sum + order.totalCost, 0);
+            const totalPacking = processedOrders.reduce((sum, order) => sum + order.orderPackingFee, 0);
+            const directTrainRmb = directTrain / exchangeRate;
+            
+            // 新增：计算 负回款订单货款和
+            const negativeCostSum = processedOrders
+                .filter(order => order.orderRevenue < 0)
+                .reduce((sum, order) => sum + order.totalCost, 0);
+
+            const totalProfit = rmbRevenue - directTrainRmb - totalCost - totalPacking;
+            
+            document.getElementById('totalRevenue').textContent = totalRevenue.toFixed(2);
+            document.getElementById('commissionRevenue').textContent = commissionRevenue.toFixed(2);
+            document.getElementById('rmbRevenue').textContent = rmbRevenue.toFixed(2);
+            document.getElementById('totalCost').textContent = totalCost.toFixed(2);
+            document.getElementById('totalPacking').textContent = totalPacking.toFixed(2);
+            document.getElementById('directTrainRmb').textContent = directTrainRmb.toFixed(2);
+            document.getElementById('negativeCostSum').textContent = negativeCostSum.toFixed(2);
+            document.getElementById('totalProfit').textContent = totalProfit.toFixed(2);
+        }
+
+        // ====================== 新增：导出订单表格 ======================
+        function exportOrderTable() {
+            if (!processedOrders || processedOrders.length === 0) {
+                alert("暂无订单数据可导出！");
+                return;
+            }
+
+            const exportData = processedOrders.map(order => ({
+                "订单ID": order.orderId,
+                "总SKU数": order.totalSkuCount,
+                "订单回款": parseFloat(order.orderRevenue.toFixed(2)),
+                "打包费": parseFloat(order.orderPackingFee.toFixed(2)),
+                "货款": parseFloat(order.totalCost.toFixed(2)),
+                "订单利润": parseFloat(order.orderProfit.toFixed(2))
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "订单数据");
+
+            // 自动列宽
+            const wscols = [
+                {wch:20}, {wch:10}, {wch:12},
+                {wch:10}, {wch:12}, {wch:12}
+            ];
+            worksheet["!cols"] = wscols;
+
+            // 下载文件
+            XLSX.writeFile(workbook, "订单分析结果.xlsx");
+        }
+        // ================================================================
+    </script>
+</body>
+</html>
