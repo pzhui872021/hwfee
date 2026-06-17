@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订单运费计算器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#F59E0B',
+                        danger: '#EF4444',
+                        dark: '#1F2937',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .card-shadow {
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            }
+            .gradient-bg {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 顶部导航 -->
+    <nav class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-shipping-fast text-2xl"></i>
+                    <h1 class="text-2xl font-bold">订单运费计算器</h1>
+                </div>
+                <div class="text-sm opacity-90">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    本地计算，数据安全
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-6 py-8">
+        <!-- 文件上传区域 -->
+        <div class="max-w-4xl mx-auto mb-8">
+            <div class="bg-white rounded-xl card-shadow p-8">
+                <div class="text-center mb-6">
+                    <i class="fas fa-file-upload text-4xl text-primary mb-3"></i>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">上传Excel订单文件</h2>
+                    <p class="text-gray-600">支持.xlsx格式文件，请确保文件包含正确的订单数据结构</p>
+                </div>
+                
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary transition-colors duration-300" id="dropZone">
+                    <i class="fas fa-cloud-upload-alt text-5xl text-gray-400 mb-4"></i>
+                    <p class="text-gray-600 mb-4">拖放Excel文件到此处，或点击选择文件</p>
+                    <input type="file" id="fileInput" accept=".xlsx" class="hidden">
+                    <button id="uploadBtn" class="bg-primary hover:bg-primary/90 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105">
+                        <i class="fas fa-search mr-2"></i>选择文件
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 处理结果区域 -->
+        <div id="resultsArea" class="hidden max-w-6xl mx-auto">
+            <!-- 统计概览 -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-xl card-shadow p-6 border-l-4 border-primary">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm font-medium">总订单数</p>
+                            <p class="text-3xl font-bold text-gray-800" id="totalOrders">0</p>
+                        </div>
+                        <i class="fas fa-shopping-cart text-2xl text-primary"></i>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl card-shadow p-6 border-l-4 border-secondary">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm font-medium">总商品数</p>
+                            <p class="text-3xl font-bold text-gray-800" id="totalItems">0</p>
+                        </div>
+                        <i class="fas fa-box text-2xl text-secondary"></i>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl card-shadow p-6 border-l-4 border-accent">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm font-medium">总运费</p>
+                            <p class="text-3xl font-bold text-gray-800" id="totalShippingFee">¥0.00</p>
+                        </div>
+                        <i class="fas fa-money-bill-wave text-2xl text-accent"></i>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl card-shadow p-6 border-l-4 border-danger">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm font-medium">平均运费</p>
+                            <p class="text-3xl font-bold text-gray-800" id="avgShippingFee">¥0.00</p>
+                        </div>
+                        <i class="fas fa-calculator text-2xl text-danger"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 图表区域 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-chart-pie text-primary mr-2"></i>运费分布
+                    </h3>
+                    <div class="h-80">
+                        <canvas id="shippingFeeChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl card-shadow p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-chart-bar text-secondary mr-2"></i>商品分类分布
+                    </h3>
+                    <div class="h-80">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 订单详情表格 -->
+            <div class="bg-white rounded-xl card-shadow overflow-hidden mb-8">
+                <div class="bg-gray-50 px-6 py-4 border-b">
+                    <h3 class="text-xl font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-table text-primary mr-2"></i>订单运费详情
+                    </h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">订单编号</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">商品数量</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">主要分类</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">基础运费</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">数量加价</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总运费</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orderTableBody" class="bg-white divide-y divide-gray-200">
+                            <!-- 订单数据将通过JavaScript动态填充 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 下载按钮 -->
+            <div class="text-center">
+                <button id="downloadBtn" class="bg-secondary hover:bg-secondary/90 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-300 transform hover:scale-105">
+                    <i class="fas fa-download mr-2"></i>下载计算结果
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let shippingData = [];
+        let orderResults = [];
+        
+        // 运费配置
+        const shippingRates = {
+            '三边小于50cm': 2.6,
+            '三边小于100cm': 3.3,
+            '三边小于200cm': 5.3,
+            '': 5.3,
+            '三边大于200cm':15.3
+        };
+        
+        // 分类优先级（用于确定最高运费）
+        const categoryPriority = {
+            '三边小于50cm': 1,
+            '三边小于100cm': 2,
+            '三边小于200cm': 3,
+            '': 4,
+            '三边大于200cm':5
+        };
+
+        // DOM元素
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const resultsArea = document.getElementById('resultsArea');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        // 事件监听
+        uploadBtn.addEventListener('click', () => fileInput.click());
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                processFile(e.target.files[0]);
+            }
+        });
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-primary', 'bg-blue-50');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-primary', 'bg-blue-50');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-primary', 'bg-blue-50');
+            if (e.dataTransfer.files.length > 0) {
+                processFile(e.dataTransfer.files[0]);
+            }
+        });
+        
+        downloadBtn.addEventListener('click', downloadResults);
+
+        // 处理文件
+        function processFile(file) {
+            // 显示加载状态
+            uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>处理中...';
+            uploadBtn.disabled = true;
+            
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    // 获取第一个工作表
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // 转换为JSON
+                    shippingData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    // 验证数据结构
+                    if (!validateDataStructure()) {
+                        alert('数据结构不正确，请确保包含必要的列：订单编号、商品数量、商品自定义分类');
+                        resetUI();
+                        return;
+                    }
+                    
+                    // 计算运费
+                    calculateShippingFees();
+                    
+                    // 显示结果
+                    displayResults();
+                    
+                    // 创建图表
+                    createCharts();
+                    
+                } catch (error) {
+                    console.error('处理文件时出错：', error);
+                    alert('处理文件时出错，请检查文件格式是否正确');
+                    resetUI();
+                }
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 验证数据结构
+        function validateDataStructure() {
+            if (shippingData.length === 0) return false;
+            
+            const requiredColumns = ['订单编号', '商品数量', '商品自定义分类'];
+            const firstRow = shippingData[0];
+            
+            return requiredColumns.every(col => firstRow.hasOwnProperty(col));
+        }
+
+        // 计算运费
+        function calculateShippingFees() {
+            // 按订单编号分组
+            const orders = {};
+            
+            shippingData.forEach(item => {
+                const orderId = item['订单编号'];
+                const quantity = parseInt(item['商品数量']) || 0;
+                const category = item['商品自定义分类'];
+                
+                if (!orders[orderId]) {
+                    orders[orderId] = {
+                        orderId: orderId,
+                        items: [],
+                        totalQuantity: 0,
+                        categories: new Set(),
+                        maxPriority: 0,
+                        mainCategory: '',
+                        baseFee: 0,
+                        quantityFee: 0,
+                        totalFee: 0
+                    };
+                }
+                
+                orders[orderId].items.push(item);
+                orders[orderId].totalQuantity += quantity;
+                orders[orderId].categories.add(category);
+                
+                // 更新最高优先级分类
+                const priority = categoryPriority[category] || 0;
+                if (priority > orders[orderId].maxPriority) {
+                    orders[orderId].maxPriority = priority;
+                    orders[orderId].mainCategory = category;
+                }
+            });
+            
+            // 计算每个订单的运费
+            orderResults = Object.values(orders).map(order => {
+                // 确定基础运费
+                const baseFee = shippingRates[order.mainCategory] || 0;
+                
+                // 计算数量加价（超过3个的部分，每多一个加0.6）
+                const excessQuantity = Math.max(0, order.totalQuantity - 3);
+                let quantityFee = excessQuantity * 0.6;
+
+                if (baseFee == 5.3) {
+                    if (excessQuantity > 0) {
+                        quantityFee = excessQuantity * 2;
+                    }
+                }
+
+                if (baseFee == 3.3) {
+                    if (excessQuantity > 0) {
+                        quantityFee = excessQuantity * 0.8;
+                    }
+                }
+
+                // 计算总运费
+                const totalFee = baseFee + quantityFee;
+                
+                return {
+                    ...order,
+                    baseFee: baseFee,
+                    quantityFee: quantityFee,
+                    totalFee: totalFee
+                };
+            });
+        }
+
+        // 显示结果
+        function displayResults() {
+            // 计算统计数据
+            const totalOrders = orderResults.length;
+            const totalItems = shippingData.length;
+            const totalShippingFee = orderResults.reduce((sum, order) => sum + order.totalFee, 0);
+            const avgShippingFee = totalOrders > 0 ? totalShippingFee / totalOrders : 0;
+            
+            // 更新统计卡片
+            document.getElementById('totalOrders').textContent = totalOrders;
+            document.getElementById('totalItems').textContent = totalItems;
+            document.getElementById('totalShippingFee').textContent = `¥${totalShippingFee.toFixed(2)}`;
+            document.getElementById('avgShippingFee').textContent = `¥${avgShippingFee.toFixed(2)}`;
+            
+            // 填充订单表格
+            const tableBody = document.getElementById('orderTableBody');
+            tableBody.innerHTML = '';
+            
+            orderResults.forEach(order => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors duration-200';
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.orderId}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.totalQuantity}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getCategoryBadgeClass(order.mainCategory)}">
+                            ${order.mainCategory}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">¥${order.baseFee.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">¥${order.quantityFee.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-primary">¥${order.totalFee.toFixed(2)}</td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+            
+            // 显示结果区域
+            resultsArea.classList.remove('hidden');
+            
+            // 重置上传按钮
+            resetUI();
+        }
+
+        // 获取分类标签样式
+        function getCategoryBadgeClass(category) {
+            switch(category) {
+                case '三边小于50cm':
+                    return 'bg-green-100 text-green-800';
+                case '三边小于100cm':
+                    return 'bg-yellow-100 text-yellow-800';
+                case '三边小于200cm':
+                    return 'bg-red-100 text-red-800';
+                case '三边大于200cm':
+                    return 'bg-red-100 text-Blue-800';
+                default:
+                    return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+        // 创建图表
+        function createCharts() {
+            // 运费分布图表
+            createShippingFeeChart();
+            
+            // 商品分类分布图表
+            createCategoryChart();
+        }
+
+        // 创建运费分布图表
+        function createShippingFeeChart() {
+            const ctx = document.getElementById('shippingFeeChart').getContext('2d');
+            
+            // 按运费区间分组
+            const feeRanges = {
+                '¥0-3': 0,
+                '¥3-4': 0,
+                '¥4-5': 0,
+                '¥5-6': 0,
+                '¥6+': 0
+            };
+            
+            orderResults.forEach(order => {
+                const fee = order.totalFee;
+                if (fee <= 3) feeRanges['¥0-3']++;
+                else if (fee <= 4) feeRanges['¥3-4']++;
+                else if (fee <= 5) feeRanges['¥4-5']++;
+                else if (fee <= 6) feeRanges['¥5-6']++;
+                else feeRanges['¥6+']++;
+            });
+            
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(feeRanges),
+                    datasets: [{
+                        data: Object.values(feeRanges),
+                        backgroundColor: [
+                            '#10B981', // 绿色
+                            '#F59E0B', // 黄色
+                            '#EF4444', // 红色
+                            '#8B5CF6', // 紫色
+                            '#3B82F6'  // 蓝色
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 创建商品分类分布图表
+        function createCategoryChart() {
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            
+            // 统计各分类的订单数量
+            const categoryStats = {};
+            orderResults.forEach(order => {
+                categoryStats[order.mainCategory] = (categoryStats[order.mainCategory] || 0) + 1;
+            });
+            
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(categoryStats),
+                    datasets: [{
+                        label: '订单数量',
+                        data: Object.values(categoryStats),
+                        backgroundColor: [
+                            '#10B981', // 绿色
+                            '#F59E0B', // 黄色
+                            '#EF4444'  // 红色
+                        ],
+                        borderColor: [
+                            '#059669',
+                            '#D97706',
+                            '#DC2626'
+                        ],
+                        borderWidth: 1,
+                        borderRadius: 8,
+                        borderSkipped: false,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            },
+                            grid: {
+                                color: '#F3F4F6'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 下载结果
+        function downloadResults() {
+            // 准备下载数据
+            const exportData = orderResults.map(order => ({
+                '订单编号': order.orderId,
+                '商品数量': order.totalQuantity,
+                '主要分类': order.mainCategory,
+                '基础运费': order.baseFee,
+                '数量加价': order.quantityFee,
+                '总运费': order.totalFee
+            }));
+            
+            // 创建工作簿和工作表
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '运费计算结果');
+            
+            // 下载文件
+            XLSX.writeFile(wb, '订单运费计算结果.xlsx');
+        }
+
+        // 重置UI
+        function resetUI() {
+            uploadBtn.innerHTML = '<i class="fas fa-search mr-2"></i>选择文件';
+            uploadBtn.disabled = false;
+            fileInput.value = '';
+        }
+    </script>
+</body>
+</html>
